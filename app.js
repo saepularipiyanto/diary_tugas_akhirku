@@ -9,7 +9,9 @@ const mockData = {
     major: "Teknik Informatika",
     thesisTitle: "Implementasi Progressive Web App (PWA) Sebagai Diary Kendali Bimbingan Tugas Akhir Mahasiswa UIN Jakarta",
     defenseDate: "2026-07-20",
-    approvedChapters: ["chap-1", "chap-2"]
+    approvedChapters: ["chap-1", "chap-2"],
+    advisor1Id: "",
+    advisor2Id: ""
   },
   meetingTarget: {
     date: "2026-05-28T09:30",
@@ -152,6 +154,15 @@ function initMasterAdvisors() {
 function getMasterAdvisors() {
   initMasterAdvisors();
   return JSON.parse(localStorage.getItem(MASTER_ADVISORS_KEY) || '[]');
+}
+
+function getAssignedAdvisors() {
+  if (!appState || !appState.profile) return [];
+  const { advisor1Id, advisor2Id } = appState.profile;
+  const assignedIds = [advisor1Id, advisor2Id].filter(Boolean);
+  if (assignedIds.length === 0) return [];
+  const masterAdvisors = getMasterAdvisors();
+  return masterAdvisors.filter(adv => assignedIds.includes(adv.id));
 }
 
 function initMasterChapters() {
@@ -297,7 +308,9 @@ function initAppState() {
         major: userMeta ? userMeta.major : "Teknik Informatika",
         thesisTitle: "",
         defenseDate: "",
-        approvedChapters: []
+        approvedChapters: [],
+        advisor1Id: "",
+        advisor2Id: ""
       },
       meetingTarget: {
         date: "",
@@ -315,6 +328,20 @@ function initAppState() {
       }
     };
     saveAppState();
+  }
+
+  // Ensure advisor assignment fields exist (default: belum ditugaskan)
+  if (appState && appState.profile) {
+    let profileUpdated = false;
+    if (appState.profile.advisor1Id === undefined) {
+      appState.profile.advisor1Id = "";
+      profileUpdated = true;
+    }
+    if (appState.profile.advisor2Id === undefined) {
+      appState.profile.advisor2Id = "";
+      profileUpdated = true;
+    }
+    if (profileUpdated) saveAppState();
   }
 
   // Chapters Array Migration (Safe for Saepul's dynamic checks)
@@ -714,13 +741,7 @@ function populateDropdowns() {
   const revisionAdvisorSelect = document.getElementById('revision-advisor');
   if (revisionAdvisorSelect) revisionAdvisorSelect.innerHTML = '';
 
-  const masterAdvisors = getMasterAdvisors();
-  
-  // Filter student advisors if assigned
-  let studentAdvisors = masterAdvisors;
-  if (appState.profile && (appState.profile.advisor1Id || appState.profile.advisor2Id)) {
-    studentAdvisors = masterAdvisors.filter(adv => adv.id === appState.profile.advisor1Id || adv.id === appState.profile.advisor2Id);
-  }
+  const studentAdvisors = getAssignedAdvisors();
 
   studentAdvisors.forEach(adv => {
     // Filter in logs list
@@ -1629,10 +1650,7 @@ function renderAdvisors() {
     btnAddAdvisorAction.style.display = 'none';
   }
 
-  let studentAdvisors = masterAdvisors;
-  if (appState && appState.profile && (appState.profile.advisor1Id || appState.profile.advisor2Id)) {
-    studentAdvisors = masterAdvisors.filter(adv => adv.id === appState.profile.advisor1Id || adv.id === appState.profile.advisor2Id);
-  }
+  const studentAdvisors = getAssignedAdvisors();
 
   if (studentAdvisors.length === 0) {
     dom.advisorsContainer.innerHTML = `
@@ -1832,9 +1850,14 @@ function triggerPrintController() {
   document.getElementById('print-student-nim').innerText = appState.profile.nim;
   document.getElementById('print-thesis-title').innerText = appState.profile.thesisTitle;
   
-  // Find Pembimbing 1 and Pembimbing 2
-  const pembimbing1 = appState.advisors.find(a => a.role.includes("I (Utama)"));
-  const pembimbing2 = appState.advisors.find(a => a.role.includes("II (Pendamping)"));
+  // Find Pembimbing 1 and Pembimbing 2 from admin assignment
+  const masterAdvisors = getMasterAdvisors();
+  const pembimbing1 = appState.profile.advisor1Id
+    ? masterAdvisors.find(a => a.id === appState.profile.advisor1Id)
+    : null;
+  const pembimbing2 = appState.profile.advisor2Id
+    ? masterAdvisors.find(a => a.id === appState.profile.advisor2Id)
+    : null;
 
   document.getElementById('print-advisor-1').innerText = pembimbing1 ? pembimbing1.name : "-";
   document.getElementById('print-advisor-2').innerText = pembimbing2 ? pembimbing2.name : "-";
